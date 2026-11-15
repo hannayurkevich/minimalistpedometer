@@ -1,0 +1,153 @@
+# Minimalist Pedometer
+
+A quiet, premium step counter for Android and iOS with exactly two screens:
+
+- **Today**: pure white, just today's step count. Tap it to show walking time in Muted Bronze; it returns to steps after 2 s or on the next tap.
+- **Statistics**: flat Espresso Black, with a grid of the last 30 days (today is always the last square), the current week's bars, the daily target, and the daily average.
+
+Swipe horizontally between the two screens. A short, light swipe is enough; the two page dots are drawn once and look the same on both screens. Swipe tuning lives in `SwipeTuning` (`lib/src/ui/swipe_pager.dart`). Everything stays on the device: no accounts, no backend, no network.
+
+|              | Value                  |
+|--------------|------------------------|
+| App name     | Minimalist Pedometer   |
+| Android ID   | `com.hy.minipedometer` |
+| iOS bundle   | `com.hy.minipedometer` |
+| Min versions | Android 8.0 (API 26), iOS 15 |
+| Dependencies | `shared_preferences` only. Fonts are bundled (Source Serif 4 and Inter, OFL). |
+
+---
+
+## Architecture
+
+```
+lib/
+  main.dart                      bootstrap (real tracker, or debug demo)
+  src/
+    app.dart                     MaterialApp + two-page SwipePager
+    theme/palette.dart           all colors (adjust here)
+    theme/typography.dart        serif / sans styles
+    util/day.dart                local calendar date (keys, week, month)
+    util/format.dart             "11 350", "3h 40m"
+    model/                       DayRecord, TrackingStatus, WalkingTime
+    data/step_store.dart         persistence (history, target, ledger baseline)
+    stats/stats.dart             pure calculations (levels, average, scale)
+    tracking/
+      step_tracker.dart          common interface + channel names
+      android_step_tracker.dart  drains native queue → ledger → store
+      ios_step_tracker.dart      Core Motion queries → store
+      step_ledger.dart           pure Dart step accounting (Android)
+      step_sample.dart
+    controller/pedometer_controller.dart   lifecycle, midnight rollover, sync
+    demo/demo_mode.dart          debug-only reference data
+    ui/                          today/, stats/, page_dots.dart, swipe_pager.dart
+android/app/src/main/kotlin/com/hy/minipedometer/
+  StepCounterService.kt          foreground service + step counter sensor
+  SampleStore.kt                 native reading queue + walking time
+  MainActivity.kt                method/event channels, permission
+  BootReceiver.kt                restart after reboot / update
+ios/Runner/AppDelegate.swift     PedometerBridge (CMPedometer, CMMotionActivityManager)
+```
+
+The UI only reads the `StepStore` through `PedometerController`. Trackers write platform data into the store. There is no state-management framework: just a `ChangeNotifier` and `ListenableBuilder`.
+
+### Data model: unknown is not zero
+
+A missing `DayRecord` means *unknown*. A record with `steps == 0` is a *known* day without steps. Each record also has a `complete` flag: `false` means part of the day could not be observed (for example, tracking started mid-day or the phone rebooted unexpectedly). Incomplete days are shown but left out of the average. Unknown days are drawn as outlined squares in the calendar and as `–` in the bars.
+
+### Daily average
+
+The average covers the **current calendar week (Mon–Sun)**. It includes the days that are already over (Monday up to yesterday) and have **complete** data. Today is excluded because it's still in progress. Unknown and partial days are skipped rather than counted as zero. Before any such day exists (every Monday, or right after installing), it shows `–`.
+
+> Note: the reference mock-up shows 8 300, but its own bar values average to **8 017** under this rule, and the app shows 8 017 in demo mode.
+
+---
+
+## Step tracking
+
+### Android: `TYPE_STEP_COUNTER` and a foreground service
+
+- **Sensor.** The hardware step counter is a low-power sensor that counts steps since boot, even while the app is closed.
+- **Why a foreground service.** Since Android 9, background apps receive *no* sensor events. Without readings over time, the app couldn't tell which day steps belong to, so `StepCounterService` keeps a listener registered. Android requires a notification for this. It uses a silent, minimum-importance "Counting steps" notification. On Android 13+ the app never asks for notification permission, so the notification usually doesn't appear in the shade at all, although the service still runs.
+- **Battery.** While the UI is hidden, the service uses hardware batching (5-minute report latency, preferring the wake-up sensor variant). Readings are buffered in the sensor hub and each keeps its own timestamp. While the app is visible, readings are delivered immediately.
+- **Capture vs accounting.**
+  - Native code only queues raw readings (`boot count, elapsed time, wall time, counter value`).
+  - The Dart `StepLedger` turns them into daily totals.
+  - Readings are acknowledged (deleted natively) only *after* the totals and ledger baseline are saved, in one atomic write. A crash therefore can never lose or double-count steps.
+- **Reboots.** `Settings.Global.BOOT_COUNT` detects a new boot, so the new value is exactly the steps since boot. A clean shutdown is captured via `ACTION_SHUTDOWN`. After an unclean one with a long unobserved gap, the day is marked partial. The service restarts on `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`.
+- **Sensor resets.** A counter value that goes backwards without a reboot is treated as a restart from 0, and the day is marked partial.
+- **Midnight.** Steps between two readings go to the later reading's day. If two readings far apart (over 30 min) span midnight and steps occurred between them, the split is unknowable. Both days are marked partial and nothing is guessed.
+- **Limitations:**
+  - History starts when the app is first allowed to count. Android keeps no per-day step history that an app could reconstruct.
+  - If the user force-stops the app, nothing is recorded until it's opened again. The gap is then flagged as described above.
+  - Some manufacturers (aggressive battery savers) may kill foreground services. Allowing the app in the battery settings helps.
+  - **Health Connect** could add history from other sources (Fit, Samsung Health, and Android 16+ on-device step tracking). It is not included in v1. It would add a dependency, a permission flow and Play Console declarations.
+- **Walking time (measured).** The service adds up the real time between consecutive step readings that are ≤ 15 s apart at walking cadence (≥ 0.6 steps/s). It is *not* derived from the step count. If the sensor hub drops readings, walking time can be under-reported.
+
+### iOS: Core Motion
+
+- **Steps.** `CMPedometer` reads from the motion coprocessor, which counts continuously even when the app isn't running. The app queries each of the last 7 days (the system's retention) on launch, resume and at midnight, and stores them locally. Days older than 7 days come from that local history.
+- **Live updates.** `startUpdates(from: startOfToday)` while the app is in the foreground.
+- **Walking time (measured).** `CMMotionActivityManager` sums the periods iOS classified as *walking* or *running* with medium/high confidence. It uses the same Motion & Fitness permission.
+- **Permission.** The system prompt appears on the first query. Once denied, only Settings can change it, so the step count is replaced by *Tap to open Settings*. Devices without step counting show a quiet "cannot count steps" message.
+
+### States
+
+All states are shown in place of the step count, with no extra UI:
+
+- *Tap to allow step counting*: first launch, or denied on Android with retry possible.
+- *Step access is off. Tap to open Settings*: permanently denied.
+- *This device cannot count steps*: unsupported.
+- *Steps are temporarily unavailable*: platform error.
+- `–`: no data yet.
+
+---
+
+## Running
+
+```bash
+flutter pub get
+flutter run                          # real tracking (use a physical device)
+flutter run --dart-define=DEMO=true  # debug-only demo with the reference values
+```
+
+Demo mode is gated by `kDebugMode` (a compile-time constant), so profile and release builds can never contain it. It shows the 30 days up to "today", Sunday 28 February 2027.
+
+Release builds: configure your own signing in `android/app/build.gradle.kts` (it currently uses the debug key) and a development team in Xcode.
+
+## Tests
+
+```bash
+flutter test                                    # everything
+flutter test --exclude-tags visual              # logic + widget tests only
+flutter test test/visual --update-goldens       # re-render design screenshots
+```
+
+| File | Covers |
+|------|--------|
+| `test/step_ledger_test.dart` | first reading, double-count prevention, restart re-delivery, reboots (clean/unclean/no BOOT_COUNT), sensor reset, midnight attribution, ambiguous gaps |
+| `test/stats_test.dart` | goal and calendar classification, weekly average with partial history, bar scale, 30-day grid ending today, DST-safe day arithmetic, formatting |
+| `test/persistence_test.dart` | target default and persistence, history after restart, corrupt state, demo never persisted, Android save-then-ack |
+| `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
+| `test/visual/` | golden renders of both screens (in `goldens/`) for design review |
+
+## Testing on physical devices
+
+Simulators and emulators don't produce real step data. Use real phones.
+
+### Android
+1. `flutter run` on a device with a step counter (most phones since ~2015).
+2. **First launch:** tap the screen's centre and allow *Physical activity*. A count appears after the first steps. The first day is partial because tracking began mid-day.
+3. **Live:** walk with the app open; the count updates within about a second.
+4. **Background:** lock the phone and walk ~100 steps. On reopening, the count catches up straight away (a sensor flush happens on resume).
+5. **App restart:** swipe the app away, walk, and reopen. No steps are lost or double-counted.
+6. **Reboot:** note the count, reboot, walk, and open. It continues from the earlier total.
+7. **Date rollover:** keep the app open across midnight, or change the device time. Today resets and yesterday appears in the bars and calendar.
+8. **Denial:** deny once to see *Tap to allow*. Deny again to see *Tap to open Settings*. Revoking the permission in Settings is detected when the app resumes.
+9. Check `adb shell dumpsys activity services com.hy.minipedometer` to confirm the service is running.
+
+### iOS
+1. Open `ios/Runner.xcworkspace` in Xcode, set your Team, and run on an iPhone.
+2. Allow *Motion & Fitness*. Today's steps and the last 7 days appear immediately, from data the iPhone recorded before the app was installed.
+3. Walk with the app open; the count updates live. Tap the step count for walking time.
+4. Denial: Settings › Privacy & Security › Motion & Fitness. Turn the app off and return; the step count is replaced by a Settings prompt.
+5. Date rollover: keep the app open across midnight.

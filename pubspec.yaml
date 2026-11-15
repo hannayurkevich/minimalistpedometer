@@ -1,0 +1,37 @@
+name: minipedometer
+description: "Minimalist Pedometer — a quiet, premium step counter."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The only runtime dependency: small key-value persistence for history,
+  # the daily target and the Android step-ledger state.
+  shared_preferences: ^2.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: false
+
+  assets:
+    - assets/fonts/OFL-SourceSerif4.txt
+    - assets/fonts/OFL-Inter.txt
+
+  # Fonts are bundled (no runtime downloads — the app is fully offline).
+  # Both are variable fonts; weights/optical sizes are set via FontVariation
+  # in lib/src/theme/typography.dart.
+  fonts:
+    - family: SourceSerif4
+      fonts:
+        - asset: assets/fonts/SourceSerif4.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
