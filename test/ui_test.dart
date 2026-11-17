@@ -8,6 +8,8 @@ import 'package:minipedometer/src/data/step_store.dart';
 import 'package:minipedometer/src/model/day_record.dart';
 import 'package:minipedometer/src/model/tracking_status.dart';
 import 'package:minipedometer/src/tracking/step_tracker.dart';
+import 'package:minipedometer/src/theme/palette.dart';
+import 'package:minipedometer/src/ui/page_dots.dart';
 import 'package:minipedometer/src/ui/swipe_pager.dart';
 import 'package:minipedometer/src/ui/today/step_figure.dart';
 import 'package:minipedometer/src/util/day.dart';
@@ -144,9 +146,32 @@ void main() {
   });
 
   group('missing data & permissions', () {
-    testWidgets('unknown steps show a dash, never a fake zero', (tester) async {
+    testWidgets('a new day without steps yet shows 0, not a dash', (
+      tester,
+    ) async {
       await pumpApp(tester);
-      expect(find.text('–'), findsWidgets);
+      expect(find.text('0'), findsOneWidget);
+      expect(find.text('–'), findsNothing);
+      await finish(tester);
+    });
+
+    testWidgets('first day: average is today so far, never a dash', (
+      tester,
+    ) async {
+      tracker.platformSteps = {today: 1200};
+      await pumpApp(tester);
+      await tester.fling(find.byType(SwipePager), const Offset(-300, 0), 1000);
+      await tester.pumpAndSettle();
+      // Target 7 000 is the first figure; the average is 1 200.
+      expect(find.text('1\u00a0200'), findsWidgets);
+      await finish(tester);
+    });
+
+    testWidgets('steps are a dash only before counting is allowed', (
+      tester,
+    ) async {
+      tracker.initial = TrackingStatus.unavailable;
+      await pumpApp(tester);
       expect(find.text('0'), findsNothing);
       await finish(tester);
     });
@@ -208,7 +233,7 @@ void main() {
       expect(find.text('Daily target'), findsOneWidget);
       expect(find.text('Daily average'), findsOneWidget);
       expect(find.text('7 000'), findsOneWidget); // default target
-      expect(find.text('7 050'), findsOneWidget); // (7800 + 6300) / 2
+      expect(find.text('8 483'), findsOneWidget); // (7800+6300+11350)/3
 
       await tester.fling(find.byType(SwipePager), const Offset(300, 0), 1000);
       await tester.pumpAndSettle();
@@ -247,6 +272,124 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Daily target'), findsNothing);
+      await finish(tester);
+    });
+
+    Future<void> openStatistics(WidgetTester tester) async {
+      await tester.fling(find.byType(SwipePager), const Offset(-300, 0), 1000);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('page dots are identical on both pages', (tester) async {
+      await pumpApp(tester);
+      List<Color?> dotColors() => tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byType(PageDots),
+              matching: find.byType(Container),
+            ),
+          )
+          .map((c) => (c.decoration as BoxDecoration).color)
+          .toList();
+      expect(find.byType(PageDots), findsOneWidget);
+      final onToday = dotColors();
+      expect(onToday, [Palette.pageDotActive, Palette.pageDotInactive]);
+      await openStatistics(tester);
+      expect(find.text('Daily target'), findsOneWidget);
+      expect(find.byType(PageDots), findsOneWidget);
+      expect(dotColors(), onToday.reversed.toList());
+      await finish(tester);
+    });
+
+    testWidgets('Today shows only the number, no oval outline', (tester) async {
+      tracker.platformSteps = {today: 11350};
+      await pumpApp(tester);
+      expect(find.text('11 350'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(StepFigure),
+          matching: find.byType(CustomPaint),
+        ),
+        findsNothing,
+      );
+      await finish(tester);
+    });
+
+    testWidgets('bars always show the last seven days, today last', (
+      tester,
+    ) async {
+      now = DateTime(2026, 11, 18, 12); // a Wednesday
+      await pumpApp(tester);
+      await openStatistics(tester);
+      final bars = find.byWidgetPredicate(
+        (w) =>
+            w is Semantics &&
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('bar-'),
+      );
+      final keys = tester
+          .widgetList<Semantics>(bars)
+          .map((w) => (w.key! as ValueKey<String>).value)
+          .toList();
+      expect(keys.length, 7);
+      expect(keys.first, 'bar-${const Day(2026, 11, 12).key}');
+      expect(keys.last, 'bar-${const Day(2026, 11, 18).key}');
+      await finish(tester);
+    });
+
+    testWidgets('tap the daily target to change it', (tester) async {
+      tracker.platformSteps = {today: 8000};
+      await pumpApp(tester);
+      await openStatistics(tester);
+      expect(find.text('7 000'), findsOneWidget);
+      expect(find.byType(EditableText), findsNothing);
+
+      await tester.tap(find.text('7 000'));
+      await tester.pump();
+      expect(find.byType(EditableText), findsOneWidget);
+      await tester.enterText(find.byType(EditableText), '10500');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(EditableText), findsNothing);
+      expect(find.text('10 500'), findsOneWidget);
+      expect(controller.target, 10500);
+      expect(store.target, 10500);
+      await finish(tester);
+    });
+
+    testWidgets('target edits are clamped; empty keeps the old one', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await openStatistics(tester);
+
+      await tester.tap(find.text('7 000'));
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), '0');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(controller.target, 1000);
+
+      await tester.tap(find.text('1 000'));
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), '');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(controller.target, 1000);
+      await finish(tester);
+    });
+
+    testWidgets('tapping elsewhere saves the target', (tester) async {
+      await pumpApp(tester);
+      await openStatistics(tester);
+      await tester.tap(find.text('7 000'));
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), '9000');
+      await tester.tapAt(const Offset(30, 30));
+      await tester.pumpAndSettle();
+      expect(find.byType(EditableText), findsNothing);
+      expect(controller.target, 9000);
       await finish(tester);
     });
 

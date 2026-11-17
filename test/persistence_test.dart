@@ -22,6 +22,18 @@ void main() {
       expect((await StepStore.open()).target, 9000);
     });
 
+    test('daily target is clamped to 1 000 – 100 000', () async {
+      final store = await StepStore.open();
+      await store.setTarget(0);
+      expect(store.target, 1000);
+      await store.setTarget(250000);
+      expect(store.target, 100000);
+      expect((await StepStore.open()).target, 100000);
+      // An out-of-range value saved by anything else is clamped on load.
+      SharedPreferences.setMockInitialValues({'settings.dailyTarget': 5});
+      expect((await StepStore.open()).target, 1000);
+    });
+
     test('history and ledger baseline survive an app restart', () async {
       final store = await StepStore.open();
       store.put(DayRecord(day, 11350));

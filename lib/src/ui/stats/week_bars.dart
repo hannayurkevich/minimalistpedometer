@@ -8,8 +8,9 @@ import '../../util/day.dart';
 import '../../util/format.dart';
 import 'stats_metrics.dart';
 
-/// Seven thin rounded bars for Monday–Sunday of the current week.
-/// No axes, gridlines, legend or title. One selected bar is yellow.
+/// Seven thin rounded bars for the last seven days, today at the bottom,
+/// each labelled with its weekday letter. No axes, gridlines, legend or
+/// title. One selected bar is yellow.
 class WeekBars extends StatelessWidget {
   const WeekBars({
     super.key,
@@ -41,21 +42,17 @@ class WeekBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final week = currentWeek(today);
-    final values = [
-      for (final d in week) d.isAfter(today) ? null : records[d]?.steps,
-    ];
+    final week = lastSevenDays(today);
+    final values = [for (final d in week) records[d]?.steps];
     final scale = barScale(values, target);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < 7; i++) _row(i, week[i], values[i], scale),
-      ],
+      children: [for (var i = 0; i < 7; i++) _row(week[i], values[i], scale)],
     );
   }
 
-  Widget _row(int i, Day day, int? steps, int scale) {
+  Widget _row(Day day, int? steps, int scale) {
     final future = day.isAfter(today);
     final isSelected = day == selected;
     final fraction = steps == null ? 0.0 : (steps / scale).clamp(0.0, 1.0);
@@ -66,7 +63,7 @@ class WeekBars extends StatelessWidget {
     return Semantics(
       key: ValueKey('bar-${day.key}'),
       label:
-          '${_names[i]}: ${steps == null ? (future ? 'upcoming' : 'no data') : '$steps steps'}',
+          '${_names[day.weekday - 1]}: ${steps == null ? (future ? 'upcoming' : 'no data') : '$steps steps'}',
       selected: isSelected,
       button: !future,
       child: GestureDetector(
@@ -81,7 +78,7 @@ class WeekBars extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.only(left: m.u * 4),
                   child: Text(
-                    _letters[i],
+                    _letters[day.weekday - 1],
                     style: AppType.serif(
                       size: m.barLetterFont,
                       color: Palette.lightText,

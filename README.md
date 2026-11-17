@@ -3,7 +3,7 @@
 A quiet, premium step counter for Android and iOS with exactly two screens:
 
 - **Today**: pure white, just today's step count. Tap it to show walking time in Muted Bronze; it returns to steps after 2 s or on the next tap.
-- **Statistics**: flat Espresso Black, with a grid of the last 30 days (today is always the last square), the current week's bars, the daily target, and the daily average.
+- **Statistics**: flat Espresso Black, with a grid of the last 30 days (today is always the last square), bars for the last 7 days (today at the bottom), the daily target, and the daily average.
 
 Swipe horizontally between the two screens. A short, light swipe is enough; the two page dots are drawn once and look the same on both screens. Swipe tuning lives in `SwipeTuning` (`lib/src/ui/swipe_pager.dart`). Everything stays on the device: no accounts, no backend, no network.
 
@@ -52,13 +52,17 @@ The UI only reads the `StepStore` through `PedometerController`. Trackers write 
 
 ### Data model: unknown is not zero
 
-A missing `DayRecord` means *unknown*. A record with `steps == 0` is a *known* day without steps. Each record also has a `complete` flag: `false` means part of the day could not be observed (for example, tracking started mid-day or the phone rebooted unexpectedly). Incomplete days are shown but left out of the average. Unknown days are drawn as outlined squares in the calendar and as `–` in the bars.
+A missing `DayRecord` means *unknown* for past days. Today is the exception: once counting is allowed, a new day starts at **0** on both screens. A record with `steps == 0` is a *known* day without steps. Each record also has a `complete` flag: `false` means part of the day could not be observed (for example, tracking started mid-day or the phone rebooted unexpectedly). Incomplete days are shown and count towards the average. Unknown days are drawn as outlined squares in the calendar and as `–` in the bars.
 
 ### Daily average
 
-The average covers the **current calendar week (Mon–Sun)**. It includes the days that are already over (Monday up to yesterday) and have **complete** data. Today is excluded because it's still in progress. Unknown and partial days are skipped rather than counted as zero. Before any such day exists (every Monday, or right after installing), it shows `–`.
+The average covers the **same 7 days as the bars** (six days ago through today), **including today's steps so far**, so it moves during the day as you walk. Only days with data count: right after installing, it averages the days so far, and on the first day it equals today's steps. Days without any data (for example before installing on Android) are skipped rather than counted as zero, and days with a known 0 do count.
 
-> Note: the reference mock-up shows 8 300, but its own bar values average to **8 017** under this rule, and the app shows 8 017 in demo mode.
+In demo mode (22–28 February 2027) this gives **8 493**.
+
+### Daily target
+
+Tap the target figure on the Statistics screen to type a new one (number keyboard). Tapping elsewhere, Done, or swiping away saves it. The default is **7 000**, and the allowed range is **1 000 – 100 000**: a target of 0 would mark every day as reached. Values outside the range are clamped, and an empty entry keeps the old target.
 
 ---
 
@@ -98,7 +102,7 @@ All states are shown in place of the step count, with no extra UI:
 - *Step access is off. Tap to open Settings*: permanently denied.
 - *This device cannot count steps*: unsupported.
 - *Steps are temporarily unavailable*: platform error.
-- `–`: no data yet.
+- `0`: a new day before the first steps.
 
 ---
 
@@ -125,9 +129,9 @@ flutter test test/visual --update-goldens       # re-render design screenshots
 | File | Covers |
 |------|--------|
 | `test/step_ledger_test.dart` | first reading, double-count prevention, restart re-delivery, reboots (clean/unclean/no BOOT_COUNT), sensor reset, midnight attribution, ambiguous gaps |
-| `test/stats_test.dart` | goal and calendar classification, weekly average with partial history, bar scale, 30-day grid ending today, DST-safe day arithmetic, formatting |
-| `test/persistence_test.dart` | target default and persistence, history after restart, corrupt state, demo never persisted, Android save-then-ack |
-| `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
+| `test/stats_test.dart` | goal and calendar classification, 7-day average with partial history, last-7-days bars, bar scale, 30-day grid ending today, DST-safe day arithmetic, formatting |
+| `test/persistence_test.dart` | target default, range and persistence, history after restart, corrupt state, demo never persisted, Android save-then-ack |
+| `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, editing the daily target, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
 | `test/visual/` | golden renders of both screens (in `goldens/`) for design review |
 
 ## Testing on physical devices

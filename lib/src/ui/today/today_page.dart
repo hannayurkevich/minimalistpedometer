@@ -69,18 +69,14 @@ class TodayPage extends StatelessWidget {
           content: FigureMessage('Steps are\ntemporarily unavailable'),
         );
       case TrackingStatus.ready:
-        final steps = controller.todaySteps;
+        // A new day starts at 0 — never a dash once counting is allowed.
+        final steps = controller.todaySteps ?? 0;
         final walking = controller.walkingTime.duration;
         return StepFigure(
-          content: steps == null
-              ? const StepsFigure(
-                  unknownValue,
-                  semanticLabel: 'No steps recorded yet today',
-                )
-              : StepsFigure(
-                  formatSteps(steps),
-                  semanticLabel: '$steps steps today',
-                ),
+          content: StepsFigure(
+            formatSteps(steps),
+            semanticLabel: '$steps steps today',
+          ),
           walkingTime: walking == null
               ? unknownValue
               : formatWalkingTime(walking),

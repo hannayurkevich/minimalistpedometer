@@ -31,49 +31,44 @@ void main() {
     });
   });
 
-  group('weekly average', () {
-    test('averages completed days of the current week, excluding today', () {
+  group('daily average (last 7 days incl. today)', () {
+    test('averages the seven bar days, including today so far', () {
       final r = recordsOf([
+        DayRecord(sunday.addDays(-7), 50000), // a week ago: outside
         DayRecord(monday, 7800),
         DayRecord(monday.addDays(1), 6300),
         DayRecord(monday.addDays(2), 2200),
         DayRecord(monday.addDays(3), 10800),
         DayRecord(monday.addDays(4), 10500),
         DayRecord(monday.addDays(5), 10500),
-        DayRecord(sunday, 11350), // today: ignored
+        DayRecord(sunday, 11350), // today: included
       ]);
-      expect(weeklyAverage(r, sunday), 8017);
+      expect(dailyAverage(r, sunday), 8493); // 59 450 / 7
     });
 
-    test('skips unknown and partial days instead of counting zeros', () {
+    test('after installing, averages only the days so far (Pixel case)', () {
+      // Installed Sunday; today is Tuesday. Wed–Sat have no data.
+      const tuesday = Day(2026, 11, 17);
       final r = recordsOf([
-        DayRecord(monday, 8000),
-        DayRecord(monday.addDays(1), 1200, complete: false), // partial
-        // Wednesday unknown
-        DayRecord(monday.addDays(3), 6000),
+        DayRecord(tuesday.addDays(-2), 2984, complete: false),
+        DayRecord(tuesday.addDays(-1), 7610),
+        DayRecord(tuesday, 2255),
       ]);
-      expect(weeklyAverage(r, sunday), 7000);
+      expect(dailyAverage(r, tuesday), 4283);
     });
 
-    test('known zero days do count', () {
+    test('known zero days count; unknown days do not', () {
       final r = recordsOf([
-        DayRecord(monday, 8000),
-        DayRecord(monday.addDays(1), 0),
+        DayRecord(monday.addDays(4), 8000),
+        DayRecord(monday.addDays(5), 0),
       ]);
-      expect(weeklyAverage(r, sunday), 4000);
+      expect(dailyAverage(r, sunday), 4000);
     });
 
-    test('is unknown on Mondays and without history', () {
-      expect(weeklyAverage({}, sunday), isNull);
-      expect(
-        weeklyAverage(recordsOf([DayRecord(monday, 9000)]), monday),
-        isNull,
-      );
-    });
-
-    test('ignores days from the previous week', () {
-      final r = recordsOf([DayRecord(monday.addDays(-1), 20000)]);
-      expect(weeklyAverage(r, monday.addDays(1)), isNull);
+    test('first day: today so far', () {
+      expect(dailyAverage(recordsOf([DayRecord(sunday, 900)]), sunday), 900);
+      expect(dailyAverage(recordsOf([DayRecord(sunday, 0)]), sunday), 0);
+      expect(dailyAverage({}, sunday), isNull);
     });
   });
 
@@ -84,9 +79,28 @@ void main() {
       expect(barScale([], 0), 1);
     });
 
-    test('default selection: today, else latest recorded day this week', () {
+    test('bars show the last seven days, today last', () {
+      final days = lastSevenDays(const Day(2026, 11, 18)); // a Wednesday
+      expect(days.length, 7);
+      expect(days.first, const Day(2026, 11, 12)); // Thursday
+      expect(days.last, const Day(2026, 11, 18));
+      expect(
+        lastSevenDays(const Day(2027, 1, 2)).first,
+        const Day(2026, 12, 27),
+      );
+    });
+
+    test('default selection: today, else latest of the last 7 days', () {
       final r = recordsOf([DayRecord(monday.addDays(2), 500)]);
       expect(defaultSelection(r, sunday), monday.addDays(2));
+      expect(
+        defaultSelection(recordsOf([DayRecord(sunday.addDays(-6), 1)]), sunday),
+        sunday.addDays(-6),
+      );
+      expect(
+        defaultSelection(recordsOf([DayRecord(sunday.addDays(-7), 1)]), sunday),
+        sunday,
+      );
       expect(
         defaultSelection({...r, sunday: DayRecord(sunday, 1)}, sunday),
         sunday,
@@ -135,7 +149,6 @@ void main() {
     test('week starts on Monday', () {
       expect(sunday.weekStart, monday);
       expect(monday.weekStart, monday);
-      expect(currentWeek(sunday).last, sunday);
     });
 
     test('day keys round-trip', () {

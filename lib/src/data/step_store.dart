@@ -21,7 +21,7 @@ class StepStore {
     for (final r in records) {
       _records[r.day] = r;
     }
-    if (target != null) _target = target;
+    if (target != null) _target = clampTarget(target);
   }
 
   static Future<StepStore> open() async {
@@ -31,6 +31,13 @@ class StepStore {
   }
 
   static const defaultTarget = 7000;
+
+  /// Allowed daily targets. A target of 0 would mark every day — even one
+  /// without a single step — as reached, so the floor is 1 000.
+  static const minTarget = 1000;
+  static const maxTarget = 100000;
+
+  static int clampTarget(int value) => value.clamp(minTarget, maxTarget);
 
   /// History and ledger baseline live in ONE document so they are always
   /// written atomically — otherwise a crash between two writes could make
@@ -54,14 +61,15 @@ class StepStore {
 
   void put(DayRecord r) => _records[r.day] = r;
 
+  /// Sets the daily target, clamped to [minTarget]…[maxTarget].
   Future<void> setTarget(int value) async {
-    _target = value;
-    await _prefs?.setInt(_kTarget, value);
+    _target = clampTarget(value);
+    await _prefs?.setInt(_kTarget, _target);
   }
 
   void _load() {
     final p = _prefs!;
-    _target = p.getInt(_kTarget) ?? defaultTarget;
+    _target = clampTarget(p.getInt(_kTarget) ?? defaultTarget);
     final raw = p.getString(_kState);
     if (raw == null) return;
     try {

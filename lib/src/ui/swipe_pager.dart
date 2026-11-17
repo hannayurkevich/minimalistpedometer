@@ -97,6 +97,8 @@ class _SwipePagerState extends State<SwipePager>
   }
 
   void _onStart(DragStartDetails _) {
+    // Swiping away ends any editing (saves the daily target).
+    FocusManager.instance.primaryFocus?.unfocus();
     // Grabbing the page mid-settle stops it under the finger.
     _position.stop();
     _dragStart = _position.value;

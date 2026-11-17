@@ -43,8 +43,19 @@ class PedometerController extends ChangeNotifier with WidgetsBindingObserver {
   Map<Day, DayRecord> get records => store.records;
   WalkingTime get walkingTime => _walkingTime;
 
-  /// Today's steps, or `null` when unknown (never a fake zero).
-  int? get todaySteps => store[today]?.steps;
+  /// Today's steps. Once counting is allowed, a day without steps yet is
+  /// 0 (a new day starts at zero); `null` only while tracking isn't ready.
+  int? get todaySteps =>
+      store[today]?.steps ?? (_status == TrackingStatus.ready ? 0 : null);
+
+  /// History for display: like [records], but once counting is allowed
+  /// today is always present (0 until the first steps arrive). Past days
+  /// without data stay unknown.
+  Map<Day, DayRecord> get displayRecords {
+    final t = today;
+    if (_status != TrackingStatus.ready || store[t] != null) return records;
+    return {...records, t: DayRecord(t, 0, complete: false)};
+  }
 
   Future<void> start() async {
     if (observeLifecycle) WidgetsBinding.instance.addObserver(this);
@@ -58,6 +69,13 @@ class PedometerController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> openSettings() => tracker.openSettings();
+
+  /// Changes the daily target (clamped to the allowed range) and saves it.
+  Future<void> setTarget(int value) async {
+    if (StepStore.clampTarget(value) == store.target) return;
+    await store.setTarget(value);
+    if (!_disposed) notifyListeners();
+  }
 
   /// Re-reads walking time (called when the user reveals it).
   Future<void> refreshWalkingTime() async {

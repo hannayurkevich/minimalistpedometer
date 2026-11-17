@@ -31,24 +31,22 @@ DayLevel classifyDay({
   return goalReached(record.steps, target) ? DayLevel.reached : DayLevel.below;
 }
 
-/// Monday … Sunday of the week containing [today].
-List<Day> currentWeek(Day today) {
-  final monday = today.weekStart;
-  return [for (var i = 0; i < 7; i++) monday.addDays(i)];
-}
+/// The seven days shown in the bars: six days ago … today (today last).
+List<Day> lastSevenDays(Day today) => [
+  for (var i = 6; i >= 0; i--) today.addDays(-i),
+];
 
-/// Daily average for the current calendar week (Monday–Sunday).
+/// Daily average over the seven days shown in the bars (six days ago …
+/// today), including today's steps so far.
 ///
-/// Definition: mean of the *completed* days of this week (Monday up to and
-/// including yesterday) that have *reliable* data (a complete record).
-/// Today is excluded because it is still in progress; unknown or partial
-/// days are excluded rather than treated as zero. Returns `null` when no
-/// such day exists yet (e.g. on Mondays, or right after installing).
-int? weeklyAverage(Map<Day, DayRecord> records, Day today) {
+/// Only days with data count: before seven days of history exist (e.g.
+/// after installing) it averages the days so far — on the first day it is
+/// simply today's steps. Days without any data are left out rather than
+/// counted as zero; known zero days count. `null` only with no data at all.
+int? dailyAverage(Map<Day, DayRecord> records, Day today) {
   final values = [
-    for (final d in currentWeek(today))
-      if (d.isBefore(today))
-        if (records[d] case final r? when r.complete) r.steps,
+    for (final d in lastSevenDays(today))
+      if (records[d] case final r?) r.steps,
   ];
   if (values.isEmpty) return null;
   return (values.reduce((a, b) => a + b) / values.length).round();
@@ -60,13 +58,13 @@ int? weeklyAverage(Map<Day, DayRecord> records, Day today) {
 int barScale(Iterable<int?> values, int target) =>
     values.whereType<int>().fold(math.max(target, 1), math.max);
 
-/// Initially selected day: today if it has data, otherwise the latest day
-/// of this week with data, otherwise today.
+/// Initially selected day: today if it has data, otherwise the latest of
+/// the last seven days with data, otherwise today.
 Day defaultSelection(Map<Day, DayRecord> records, Day today) {
   if (records.containsKey(today)) return today;
   for (
     var d = today.addDays(-1);
-    !d.isBefore(today.weekStart);
+    !d.isBefore(today.addDays(-6));
     d = d.addDays(-1)
   ) {
     if (records.containsKey(d)) return d;

@@ -36,7 +36,7 @@ class MonthGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final cells = recentCells(today);
     final rows = (cells.length / 7).ceil();
-    final week = currentWeek(today);
+    final week = lastSevenDays(today);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
