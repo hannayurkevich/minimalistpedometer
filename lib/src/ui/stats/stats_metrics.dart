@@ -12,12 +12,15 @@ class StatsMetrics {
   double get stripHeight => 48 * u;
   double get labelFont => 21 * u;
   double get stripToGrid => 26 * u;
-  double get gridInset => 8.5 * u;
-  double get cellWidth => (width - 2 * gridInset - 6 * cellGapX) / 7;
+  // Squares ~10 % smaller than the reference (38 → 34.2), spacing slightly
+  // tighter; the grid is centred under the weekday strip, whose letters
+  // use the same columns so alignment is kept.
+  double get cellWidth => 34.2 * u;
   double get cellHeight => cellWidth * 0.84;
-  double get cellGapX => 17.5 * u;
-  double get cellGapY => 8 * u;
-  double get cellRadius => 7 * u;
+  double get cellGapX => 15.5 * u;
+  double get cellGapY => 7 * u;
+  double get gridInset => (width - 7 * cellWidth - 6 * cellGapX) / 2;
+  double get cellRadius => 6.3 * u;
 
   // Weekly bars.
   double get gridToBars => 34 * u;

@@ -52,7 +52,7 @@ The UI only reads the `StepStore` through `PedometerController`. Trackers write 
 
 ### Data model: unknown is not zero
 
-A missing `DayRecord` means *unknown* for past days. Today is the exception: once counting is allowed, a new day starts at **0** on both screens. A record with `steps == 0` is a *known* day without steps. Each record also has a `complete` flag: `false` means part of the day could not be observed (for example, tracking started mid-day or the phone rebooted unexpectedly). Incomplete days are shown and count towards the average. Unknown days are drawn as outlined squares in the calendar and as `–` in the bars.
+A missing `DayRecord` means *unknown* for past days. Today is the exception: once counting is allowed, a new day starts at **0** on both screens. A record with `steps == 0` is a *known* day without steps. Each record also has a `complete` flag: `false` means part of the day could not be observed (for example, tracking started mid-day or the phone rebooted unexpectedly). Incomplete days are shown and count towards the average. Unknown days are drawn as very dark filled squares in the calendar, and as `–` with a quieter track in the bars.
 
 ### Daily average
 

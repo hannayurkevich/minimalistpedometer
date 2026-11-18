@@ -8,7 +8,6 @@ abstract final class Palette {
   static const accentYellow = Color(0xFFFFE15A);
   static const warmBeigeGray = Color(0xFFD8C9BE);
   static const darkTrack = Color(0xFF54463F);
-  static const inactiveCalendar = Color(0xFF66574F);
   static const lightText = Color(0xFFF4E9D9);
   static const mutedBronze = Color(0xFFA96F3E);
 
@@ -24,8 +23,15 @@ abstract final class Palette {
   /// Rounded strip behind the calendar weekday letters.
   static const labelStrip = Color(0xFF342A25);
 
-  /// Outline of calendar days whose data is unknown (not a known zero).
-  static const unknownOutline = Color(0xFF54463F);
+  /// Calendar: day without data (not a known zero). Filled, borderless,
+  /// almost blending into Espresso Black.
+  static const calendarNoData = Color(0xFF332A26);
+
+  /// Calendar: steps recorded, target not reached.
+  static const calendarBelowTarget = Color(0xFF8B786E);
+
+  /// Weekly bars: track of a day without data — quieter than [darkTrack].
+  static const emptyTrack = Color(0xFF3C312C);
 
   /// Calendar days later in the month that haven't happened yet.
   static const futureDay = Color(0xFF30261F);

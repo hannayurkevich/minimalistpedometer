@@ -60,12 +60,13 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final today = c.today;
     final records = c.displayRecords;
     // Keep the selection within the last seven days (handles rollover).
-    var selected = _selected;
-    if (selected == null ||
-        selected.isAfter(today) ||
-        selected.isBefore(today.addDays(-6))) {
-      selected = defaultSelection(records, today);
-    }
+    final current = _selected;
+    final selected =
+        current == null ||
+            current.isAfter(today) ||
+            current.isBefore(today.addDays(-6))
+        ? defaultSelection(records, today)
+        : current;
     void select(Day d) => setState(() => _selected = d);
 
     final padding = MediaQuery.paddingOf(context);
@@ -93,8 +94,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   today: today,
                   records: records,
                   target: c.target,
-                  selected: selected!,
-                  onSelect: select,
                   m: m,
                 ),
                 SizedBox(height: m.gridToBars),

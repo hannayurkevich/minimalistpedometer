@@ -94,6 +94,10 @@ class WeekBars extends StatelessWidget {
                   painter: _BarPainter(
                     fraction: fraction,
                     hasValue: steps != null && steps > 0,
+                    // No data (not a known zero): a quieter track.
+                    trackColor: steps == null
+                        ? Palette.emptyTrack
+                        : Palette.darkTrack,
                     color: isSelected
                         ? Palette.accentYellow
                         : Palette.warmBeigeGray,
@@ -126,11 +130,13 @@ class _BarPainter extends CustomPainter {
     required this.fraction,
     required this.hasValue,
     required this.color,
+    required this.trackColor,
   });
 
   final double fraction;
   final bool hasValue;
   final Color color;
+  final Color trackColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -138,7 +144,7 @@ class _BarPainter extends CustomPainter {
     final radius = Radius.circular(h / 2);
     canvas.drawRRect(
       RRect.fromRectAndRadius(Offset.zero & size, radius),
-      Paint()..color = Palette.darkTrack,
+      Paint()..color = trackColor,
     );
     if (!hasValue) return;
     // Length is proportional to the value; very small values still show
@@ -154,5 +160,6 @@ class _BarPainter extends CustomPainter {
   bool shouldRepaint(_BarPainter old) =>
       old.fraction != fraction ||
       old.hasValue != hasValue ||
-      old.color != color;
+      old.color != color ||
+      old.trackColor != trackColor;
 }
