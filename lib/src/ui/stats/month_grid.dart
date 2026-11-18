@@ -7,8 +7,9 @@ import '../../theme/typography.dart';
 import '../../util/day.dart';
 import 'stats_metrics.dart';
 
-/// Activity grid: the last 30 days in seven Monday-first columns, with
-/// today always the last square. Filled, borderless squares: no data,
+/// Activity grid: four complete previous weeks plus the current week up
+/// to today, in a fixed 5 × 7 Monday-first layout; today is always the
+/// last square. Filled, borderless squares: no data,
 /// below target, target reached.
 class MonthGrid extends StatelessWidget {
   const MonthGrid({
@@ -31,8 +32,10 @@ class MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cells = recentCells(today);
-    final rows = (cells.length / 7).ceil();
+    // Fixed 5 × 7 layout: positions after today stay empty (no square)
+    // so the grid's height never changes during the week.
+    final cells = calendarDays(today);
+    const rows = calendarRows;
 
     return Column(
       mainAxisSize: MainAxisSize.min,

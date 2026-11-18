@@ -72,16 +72,16 @@ Day defaultSelection(Map<Day, DayRecord> records, Day today) {
   return today;
 }
 
-/// Number of days shown in the activity grid.
-const recentDayCount = 30;
+/// Rows of the activity grid: four complete previous weeks plus the
+/// current week. The grid always reserves this many rows.
+const calendarRows = 5;
 
-/// Cells of the activity grid: the last [recentDayCount] days, oldest
-/// first, ending with [today] as the very last cell. Leading `null`s keep
-/// each day in its Monday-first weekday column.
-List<Day?> recentCells(Day today, {int days = recentDayCount}) {
-  final first = today.addDays(-(days - 1));
-  return [
-    for (var i = 0; i < first.weekday - 1; i++) null,
-    for (var i = 0; i < days; i++) first.addDays(i),
-  ];
+/// Days of the activity grid, oldest first: from the Monday four weeks
+/// before this week's Monday, through [today] (inclusive). Always starts
+/// on a Monday, so index `i` sits in row `i ~/ 7`, column `i % 7`; the
+/// count is 28 + today's weekday (29 on Mondays … 35 on Sundays). No
+/// future days are included.
+List<Day> calendarDays(Day today) {
+  final first = today.weekStart.addDays(-7 * (calendarRows - 1));
+  return [for (var d = first; !d.isAfter(today); d = d.addDays(1)) d];
 }

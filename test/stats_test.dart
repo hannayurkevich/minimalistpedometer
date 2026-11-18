@@ -110,28 +110,80 @@ void main() {
   });
 
   group('calendar dates', () {
-    test('activity grid shows the last 30 days ending today', () {
-      final cells = recentCells(sunday); // Sun 15 Nov 2026
-      final days = cells.whereType<Day>().toList();
-      expect(days.length, 30);
-      expect(days.last, sunday);
-      expect(cells.last, sunday); // nothing after today
-      expect(days.first, const Day(2026, 10, 17)); // a Saturday
-      expect(cells.take(5), everyElement(isNull)); // Saturday column
-      expect(cells[5], const Day(2026, 10, 17));
-      // Contiguous across month and year boundaries.
-      final jan = recentCells(const Day(2027, 1, 3)).whereType<Day>();
-      expect(jan.first, const Day(2026, 12, 5));
-      for (final (i, d) in jan.indexed) {
-        expect(d, const Day(2026, 12, 5).addDays(i));
-      }
-      // Today in every weekday is last and in its own column.
-      for (var k = 0; k < 7; k++) {
-        final t = sunday.addDays(k);
-        final c = recentCells(t);
-        expect(c.last, t);
-        expect((c.length - 1) % 7, t.weekday - 1);
-      }
+    group('calendar: 4 previous weeks + current week to today', () {
+      // Week of Mon 16 – Sun 22 Nov 2026.
+      const mon = Day(2026, 11, 16);
+
+      test('Monday … Sunday show 29 … 35 squares', () {
+        for (var k = 0; k < 7; k++) {
+          expect(calendarDays(mon.addDays(k)).length, 28 + k + 1);
+        }
+      });
+
+      test('starts on the Monday four weeks before this week', () {
+        for (var k = 0; k < 7; k++) {
+          final days = calendarDays(mon.addDays(k));
+          expect(days.first, const Day(2026, 10, 19));
+          expect(days.first.weekday, DateTime.monday);
+        }
+      });
+
+      test('every row is Monday…Sunday; today is last, no future days', () {
+        for (var k = 0; k < 7; k++) {
+          final today = mon.addDays(k);
+          final days = calendarDays(today);
+          for (final (i, d) in days.indexed) {
+            expect(d.weekday - 1, i % 7, reason: '$d in column ${i % 7}');
+          }
+          expect(days.last, today);
+          expect(days.any((d) => d.isAfter(today)), isFalse);
+          // Fits the fixed 5 rows, with the first 4 complete.
+          expect((days.length / 7).ceil(), calendarRows);
+          expect(days.length, greaterThanOrEqualTo(28));
+          // Contiguous.
+          for (var i = 1; i < days.length; i++) {
+            expect(days[i], days[i - 1].addDays(1));
+          }
+        }
+      });
+
+      test('next Monday drops the oldest week', () {
+        final sunday = calendarDays(mon.addDays(6));
+        final nextMonday = calendarDays(mon.addDays(7));
+        expect(nextMonday.length, 29);
+        expect(nextMonday.first, sunday.first.addDays(7));
+        expect(nextMonday.last, mon.addDays(7));
+      });
+
+      test('crosses month and year boundaries', () {
+        // Today Fri 1 Jan 2027 → current week from Mon 28 Dec 2026.
+        final days = calendarDays(const Day(2027, 1, 1));
+        expect(days.first, const Day(2026, 11, 30));
+        expect(days.length, 33);
+        expect(days[28], const Day(2026, 12, 28));
+        expect(days.last, const Day(2027, 1, 1));
+        // Leap day.
+        expect(
+          calendarDays(const Day(2028, 3, 1)).contains(const Day(2028, 2, 29)),
+          isTrue,
+        );
+      });
+
+      test('missing history stays unknown; recorded zero is known', () {
+        final today = mon.addDays(2);
+        final records = recordsOf([
+          DayRecord(today.addDays(-1), 0),
+          DayRecord(today, 8000),
+        ]);
+        final levels = [
+          for (final d in calendarDays(today))
+            classifyDay(day: d, today: today, record: records[d], target: 7000),
+        ];
+        expect(levels.length, 31);
+        expect(levels.take(29), everyElement(DayLevel.unknown));
+        expect(levels[29], DayLevel.below); // known zero
+        expect(levels[30], DayLevel.reached);
+      });
     });
 
     test('day arithmetic crosses month, year and DST boundaries', () {

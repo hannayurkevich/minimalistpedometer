@@ -31,7 +31,12 @@ abstract final class DemoData {
   ];
 
   static List<DayRecord> records() => [
-    // The 30-day grid starts on Saturday 30 January.
+    // The calendar starts on Monday 25 January (4 weeks before this week).
+    DayRecord(const Day(2027, 1, 25), 6900),
+    DayRecord(const Day(2027, 1, 26), 8100),
+    DayRecord(const Day(2027, 1, 27), 4500),
+    DayRecord(const Day(2027, 1, 28), 5200),
+    DayRecord(const Day(2027, 1, 29), 7700),
     DayRecord(const Day(2027, 1, 30), 7300),
     DayRecord(const Day(2027, 1, 31), 3600),
     for (var i = 0; i < 21; i++)

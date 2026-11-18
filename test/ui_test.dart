@@ -10,6 +10,7 @@ import 'package:minipedometer/src/model/tracking_status.dart';
 import 'package:minipedometer/src/tracking/step_tracker.dart';
 import 'package:minipedometer/src/theme/palette.dart';
 import 'package:minipedometer/src/ui/page_dots.dart';
+import 'package:minipedometer/src/ui/stats/month_grid.dart';
 import 'package:minipedometer/src/ui/swipe_pager.dart';
 import 'package:minipedometer/src/ui/today/step_figure.dart';
 import 'package:minipedometer/src/util/day.dart';
@@ -335,6 +336,36 @@ void main() {
       expect(keys.first, 'bar-${const Day(2026, 11, 12).key}');
       expect(keys.last, 'bar-${const Day(2026, 11, 18).key}');
       await finish(tester);
+    });
+
+    testWidgets('calendar keeps 5 rows; no squares after today', (
+      tester,
+    ) async {
+      double? height;
+      for (final day in [16, 18, 22]) {
+        now = DateTime(2026, 11, day, 12); // Mon, Wed, Sun
+        final t = Day(2026, 11, day);
+        controller = PedometerController(
+          tracker: tracker,
+          store: store,
+          clock: () => now,
+          observeLifecycle: false,
+        );
+        await pumpApp(tester);
+        await openStatistics(tester);
+        final cells = find.byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('cell-'),
+        );
+        expect(cells, findsNWidgets(28 + t.weekday));
+        expect(find.byKey(ValueKey('cell-${t.key}')), findsOneWidget);
+        expect(find.byKey(ValueKey('cell-${t.addDays(1).key}')), findsNothing);
+        final h = tester.getSize(find.byType(MonthGrid)).height;
+        height ??= h;
+        expect(h, height);
+        await finish(tester);
+      }
     });
 
     testWidgets('tap the daily target to change it', (tester) async {

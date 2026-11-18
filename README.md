@@ -3,7 +3,7 @@
 A quiet, premium step counter for Android and iOS with exactly two screens:
 
 - **Today**: pure white, just today's step count. Tap it to show walking time in Muted Bronze; it returns to steps after 2 s or on the next tap.
-- **Statistics**: flat Espresso Black, with a grid of the last 30 days (today is always the last square), bars for the last 7 days (today at the bottom), the daily target, and the daily average.
+- **Statistics**: flat Espresso Black, with a calendar of the four previous weeks plus the current week up to today (a fixed 5 × 7 Monday-first grid; today is always the last square), bars for the last 7 days (today at the bottom), the daily target, and the daily average.
 
 Swipe horizontally between the two screens. A short, light swipe is enough; the two page dots are drawn once and look the same on both screens. Swipe tuning lives in `SwipeTuning` (`lib/src/ui/swipe_pager.dart`). Everything stays on the device: no accounts, no backend, no network.
 
@@ -114,7 +114,7 @@ flutter run                          # real tracking (use a physical device)
 flutter run --dart-define=DEMO=true  # debug-only demo with the reference values
 ```
 
-Demo mode is gated by `kDebugMode` (a compile-time constant), so profile and release builds can never contain it. It shows the 30 days up to "today", Sunday 28 February 2027.
+Demo mode is gated by `kDebugMode` (a compile-time constant), so profile and release builds can never contain it. Its calendar runs from Monday 25 January to "today", Sunday 28 February 2027.
 
 Release builds: configure your own signing in `android/app/build.gradle.kts` (it currently uses the debug key) and a development team in Xcode.
 
@@ -129,7 +129,7 @@ flutter test test/visual --update-goldens       # re-render design screenshots
 | File | Covers |
 |------|--------|
 | `test/step_ledger_test.dart` | first reading, double-count prevention, restart re-delivery, reboots (clean/unclean/no BOOT_COUNT), sensor reset, midnight attribution, ambiguous gaps |
-| `test/stats_test.dart` | goal and calendar classification, 7-day average with partial history, last-7-days bars, bar scale, 30-day grid ending today, DST-safe day arithmetic, formatting |
+| `test/stats_test.dart` | goal and calendar classification, 7-day average with partial history, last-7-days bars, bar scale, calendar range (Mon–Sun, 29–35 days, fixed 5 rows, week/month/year boundaries), DST-safe day arithmetic, formatting |
 | `test/persistence_test.dart` | target default, range and persistence, history after restart, corrupt state, demo never persisted, Android save-then-ack |
 | `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, editing the daily target, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
 | `test/visual/` | golden renders of both screens (in `goldens/`) for design review |
