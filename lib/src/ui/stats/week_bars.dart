@@ -10,23 +10,19 @@ import 'stats_metrics.dart';
 
 /// Seven thin rounded bars for the last seven days, today at the bottom,
 /// each labelled with its weekday letter. No axes, gridlines, legend or
-/// title. One selected bar is yellow.
+/// title. Today's bar (the last one) is yellow; the bars are read-only.
 class WeekBars extends StatelessWidget {
   const WeekBars({
     super.key,
     required this.today,
     required this.records,
     required this.target,
-    required this.selected,
-    required this.onSelect,
     required this.m,
   });
 
   final Day today;
   final Map<Day, DayRecord> records;
   final int target;
-  final Day selected;
-  final ValueChanged<Day> onSelect;
   final StatsMetrics m;
 
   static const _letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -54,7 +50,7 @@ class WeekBars extends StatelessWidget {
 
   Widget _row(Day day, int? steps, int scale) {
     final future = day.isAfter(today);
-    final isSelected = day == selected;
+    final isToday = day == today;
     final fraction = steps == null ? 0.0 : (steps / scale).clamp(0.0, 1.0);
     final valueText = future
         ? ''
@@ -64,61 +60,53 @@ class WeekBars extends StatelessWidget {
       key: ValueKey('bar-${day.key}'),
       label:
           '${_names[day.weekday - 1]}: ${steps == null ? (future ? 'upcoming' : 'no data') : '$steps steps'}',
-      selected: isSelected,
-      button: !future,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: future ? null : () => onSelect(day),
-        child: SizedBox(
-          height: m.barRowHeight,
-          child: Row(
-            children: [
-              SizedBox(
-                width: m.barLetterWidth,
-                child: Padding(
-                  padding: EdgeInsets.only(left: m.u * 4),
-                  child: Text(
-                    _letters[day.weekday - 1],
-                    style: AppType.serif(
-                      size: m.barLetterFont,
-                      color: Palette.lightText,
-                      weight: 430,
-                      opticalSize: 20,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: CustomPaint(
-                  size: Size.fromHeight(m.barHeight),
-                  painter: _BarPainter(
-                    fraction: fraction,
-                    hasValue: steps != null && steps > 0,
-                    // No data (not a known zero): a quieter track.
-                    trackColor: steps == null
-                        ? Palette.emptyTrack
-                        : Palette.darkTrack,
-                    color: isSelected
-                        ? Palette.accentYellow
-                        : Palette.warmBeigeGray,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: m.barValueWidth,
+      child: SizedBox(
+        height: m.barRowHeight,
+        child: Row(
+          children: [
+            SizedBox(
+              width: m.barLetterWidth,
+              child: Padding(
+                padding: EdgeInsets.only(left: m.u * 4),
                 child: Text(
-                  valueText,
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  style: AppType.sans(
-                    size: m.barValueFont,
+                  _letters[day.weekday - 1],
+                  style: AppType.serif(
+                    size: m.barLetterFont,
                     color: Palette.lightText,
-                    tabular: true,
+                    weight: 430,
+                    opticalSize: 20,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: CustomPaint(
+                size: Size.fromHeight(m.barHeight),
+                painter: _BarPainter(
+                  fraction: fraction,
+                  hasValue: steps != null && steps > 0,
+                  // No data (not a known zero): a quieter track.
+                  trackColor: steps == null
+                      ? Palette.emptyTrack
+                      : Palette.darkTrack,
+                  color: isToday ? Palette.accentYellow : Palette.warmBeigeGray,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: m.barValueWidth,
+              child: Text(
+                valueText,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                style: AppType.sans(
+                  size: m.barValueFont,
+                  color: Palette.lightText,
+                  tabular: true,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

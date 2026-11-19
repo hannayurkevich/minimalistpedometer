@@ -368,6 +368,28 @@ void main() {
       }
     });
 
+    testWidgets('bars are read-only: yellow always stays on today', (
+      tester,
+    ) async {
+      now = DateTime(2026, 11, 19, 9); // a Thursday
+      tracker.platformSteps = {
+        const Day(2026, 11, 16): 7610, // Monday
+        const Day(2026, 11, 19): 3,
+      };
+      await pumpApp(tester);
+      await openStatistics(tester);
+      final monday = find.byKey(ValueKey('bar-${const Day(2026, 11, 16).key}'));
+      // No tap handling on any bar, so nothing can move the highlight.
+      expect(
+        find.descendant(of: monday, matching: find.byType(GestureDetector)),
+        findsNothing,
+      );
+      await tester.tap(monday, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Daily target'), findsOneWidget); // still on the page
+      await finish(tester);
+    });
+
     testWidgets('tap the daily target to change it', (tester) async {
       tracker.platformSteps = {today: 8000};
       await pumpApp(tester);

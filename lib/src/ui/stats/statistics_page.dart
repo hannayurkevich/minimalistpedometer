@@ -7,7 +7,6 @@ import '../../controller/pedometer_controller.dart';
 import '../../stats/stats.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
-import '../../util/day.dart';
 import '../../util/format.dart';
 import '../page_dots.dart';
 import 'month_grid.dart';
@@ -26,8 +25,6 @@ class StatisticsPage extends StatefulWidget {
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
-  Day? _selected;
-
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -59,15 +56,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final c = widget.controller;
     final today = c.today;
     final records = c.displayRecords;
-    // Keep the selection within the last seven days (handles rollover).
-    final current = _selected;
-    final selected =
-        current == null ||
-            current.isAfter(today) ||
-            current.isBefore(today.addDays(-6))
-        ? defaultSelection(records, today)
-        : current;
-    void select(Day d) => setState(() => _selected = d);
 
     final padding = MediaQuery.paddingOf(context);
     final dotsSpace = BottomDots.bottomOffset(context) + PageDots.size + 24;
@@ -101,8 +89,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   today: today,
                   records: records,
                   target: c.target,
-                  selected: selected,
-                  onSelect: select,
                   m: m,
                 ),
                 SizedBox(height: m.barsToSummary),

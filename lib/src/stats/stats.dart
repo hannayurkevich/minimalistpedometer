@@ -58,20 +58,6 @@ int? dailyAverage(Map<Day, DayRecord> records, Day today) {
 int barScale(Iterable<int?> values, int target) =>
     values.whereType<int>().fold(math.max(target, 1), math.max);
 
-/// Initially selected day: today if it has data, otherwise the latest of
-/// the last seven days with data, otherwise today.
-Day defaultSelection(Map<Day, DayRecord> records, Day today) {
-  if (records.containsKey(today)) return today;
-  for (
-    var d = today.addDays(-1);
-    !d.isBefore(today.addDays(-6));
-    d = d.addDays(-1)
-  ) {
-    if (records.containsKey(d)) return d;
-  }
-  return today;
-}
-
 /// Rows of the activity grid: four complete previous weeks plus the
 /// current week. The grid always reserves this many rows.
 const calendarRows = 5;

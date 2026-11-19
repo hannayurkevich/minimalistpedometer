@@ -89,24 +89,6 @@ void main() {
         const Day(2026, 12, 27),
       );
     });
-
-    test('default selection: today, else latest of the last 7 days', () {
-      final r = recordsOf([DayRecord(monday.addDays(2), 500)]);
-      expect(defaultSelection(r, sunday), monday.addDays(2));
-      expect(
-        defaultSelection(recordsOf([DayRecord(sunday.addDays(-6), 1)]), sunday),
-        sunday.addDays(-6),
-      );
-      expect(
-        defaultSelection(recordsOf([DayRecord(sunday.addDays(-7), 1)]), sunday),
-        sunday,
-      );
-      expect(
-        defaultSelection({...r, sunday: DayRecord(sunday, 1)}, sunday),
-        sunday,
-      );
-      expect(defaultSelection({}, sunday), sunday);
-    });
   });
 
   group('calendar dates', () {
