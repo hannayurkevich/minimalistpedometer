@@ -52,6 +52,12 @@ class StepStore {
   /// Most recent Android counter reading already applied to [records].
   StepSample? ledgerLast;
 
+  /// Android: identifier of the installation that produced [ledgerLast].
+  /// The native side keeps its own copy outside of backups, so after a
+  /// backup restore (or a move to another phone) the two differ and the
+  /// restored baseline is discarded — history and target are kept.
+  String? installId;
+
   int get target => _target;
 
   /// Live map of records. Mutated by trackers, then [save]d.
@@ -84,6 +90,7 @@ class StepStore {
           complete: (list[1] as num) == 1,
         );
       });
+      installId = state['installId'] as String?;
       final last = state['ledgerLast'];
       if (last is Map<String, dynamic>) {
         ledgerLast = StepSample.fromMap(last);
@@ -105,6 +112,7 @@ class StepStore {
             r.day.key: [r.steps, r.complete ? 1 : 0],
         },
         'ledgerLast': ledgerLast?.toMap(),
+        'installId': installId,
       }),
     );
   }

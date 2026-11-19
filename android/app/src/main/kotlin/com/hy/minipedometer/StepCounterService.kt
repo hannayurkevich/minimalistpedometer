@@ -109,6 +109,9 @@ class StepCounterService : Service(), SensorEventListener {
         // batch instead of dropping readings when the buffer fills up.
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER, true)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        // Observation may have been interrupted before now (process killed,
+        // force-stop, reboot): readings from here on are a new session.
+        SampleStore.beginSession(sensor?.isWakeUpSensor == true)
         registerSensor()
 
         val filter = IntentFilter(Intent.ACTION_SHUTDOWN)

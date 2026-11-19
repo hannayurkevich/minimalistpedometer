@@ -55,6 +55,7 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "readSamples" -> result.success(SampleStore.read())
+                "installId" -> result.success(SampleStore.installId())
                 "ackSamples" -> {
                     val upTo = call.argument<Number>("upTo")?.toLong()
                     if (upTo != null) SampleStore.ack(upTo)

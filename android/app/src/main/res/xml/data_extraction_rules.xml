@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ cloud backup and device-to-device transfer. Same rules as
+     backup_rules.xml: keep step history and the daily target, never carry
+     native sensor state or the permission-request flag. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="minipedometer_native.xml" />
+        <exclude domain="sharedpref" path="minipedometer_permissions.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="minipedometer_native.xml" />
+        <exclude domain="sharedpref" path="minipedometer_permissions.xml" />
+    </device-transfer>
+</data-extraction-rules>

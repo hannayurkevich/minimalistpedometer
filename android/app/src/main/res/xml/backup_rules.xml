@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6–11 Auto Backup. Step history and the daily target (Flutter
+     shared preferences) are backed up. Native sensor state and the
+     permission-request flag describe this installation only and are never
+     restored. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="minipedometer_native.xml" />
+    <exclude domain="sharedpref" path="minipedometer_permissions.xml" />
+</full-backup-content>

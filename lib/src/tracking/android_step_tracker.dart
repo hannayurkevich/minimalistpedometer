@@ -38,10 +38,14 @@ class AndroidStepTracker implements StepTracker {
       // asynchronously and trigger another sync via [changes].
       await _channel.invokeMethod<void>('flush');
     }
+    final restored = await _checkInstallation();
     final raw = await _channel.invokeListMethod<Map<Object?, Object?>>(
       'readSamples',
     );
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      if (restored) await _store.save();
+      return;
+    }
     final samples = raw.map(StepSample.fromMap).toList()
       ..sort((a, b) => a.seq.compareTo(b.seq));
 
@@ -50,6 +54,24 @@ class AndroidStepTracker implements StepTracker {
     _store.ledgerLast = ledger.last;
     await _store.save();
     await _channel.invokeMethod<void>('ackSamples', {'upTo': samples.last.seq});
+  }
+
+  /// Detects saved state that was restored into a different installation
+  /// (Android Auto Backup, a new phone, device-to-device transfer).
+  ///
+  /// Native tracking state is excluded from backups and carries its own
+  /// installation ID. If the restored ID differs, the restored counter
+  /// baseline belongs to another installation (often another device) and
+  /// is dropped: the next reading starts a fresh baseline. History and the
+  /// daily target are untouched. Without a stored ID (first install, or an
+  /// update from a version that did not record it) the ID is adopted and
+  /// tracking simply continues. Returns whether anything changed.
+  Future<bool> _checkInstallation() async {
+    final id = await _channel.invokeMethod<String>('installId');
+    if (id == null || id == _store.installId) return false;
+    if (_store.installId != null) _store.ledgerLast = null;
+    _store.installId = id;
+    return true;
   }
 
   @override

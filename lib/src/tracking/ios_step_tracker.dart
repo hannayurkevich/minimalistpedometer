@@ -53,13 +53,45 @@ class IosStepTracker implements StepTracker {
     for (var i = 0; i < days.length && i < result.length; i++) {
       final steps = result[i];
       if (steps is! num) continue; // query failed for that day → leave as is
-      final record = DayRecord(days[i], steps.toInt());
-      if (_store[days[i]] != record) {
-        _store.put(record);
+      final merged = mergeCoreMotion(
+        day: days[i],
+        today: today,
+        existing: _store[days[i]],
+        steps: steps.toInt(),
+      );
+      if (merged != null && merged != _store[days[i]]) {
+        _store.put(merged);
         changed = true;
       }
     }
     if (changed) await _store.save();
+  }
+
+  /// Merges a Core Motion count into the stored record for [day].
+  /// Returns the record to store, or `null` to leave the day as it is.
+  ///
+  /// * A day's count only ever grows, so a lower result never replaces a
+  ///   stored value (e.g. history restored from a backup onto a new
+  ///   iPhone, where Core Motion has nothing for those days).
+  /// * Core Motion reports 0 both for "no steps" and "nothing recorded"
+  ///   (phone not set up yet, motion data unavailable). For past days a 0
+  ///   therefore never creates or changes a record: the day stays unknown
+  ///   rather than becoming a fake zero.
+  /// * Today is created as soon as Core Motion answers (it starts at 0)
+  ///   and then follows the live count.
+  static DayRecord? mergeCoreMotion({
+    required Day day,
+    required Day today,
+    required DayRecord? existing,
+    required int steps,
+  }) {
+    if (steps < 0) return null;
+    if (existing == null) {
+      if (steps == 0 && day != today) return null;
+      return DayRecord(day, steps);
+    }
+    if (steps <= existing.steps) return null;
+    return existing.copyWith(steps: steps);
   }
 
   @override

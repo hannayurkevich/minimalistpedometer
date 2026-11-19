@@ -15,9 +15,17 @@ import 'step_sample.dart';
 /// * A counter value going backwards without a reboot (rare sensor/HAL
 ///   reset) is treated like a restart from 0.
 /// * Steps between two readings are credited to the day of the later
-///   reading. If those readings straddle midnight and are far apart, the
-///   split between days is unknowable: both days are marked incomplete
-///   rather than guessed.
+///   reading when that is known to be right:
+///   - both readings are on the same day, or less than [tolerance] apart;
+///   - or the sensor was *observed* the whole time: the step counter
+///     reports every change, so if it stayed registered (same session)
+///     and its events cannot have been dropped, no readings means no
+///     steps — e.g. an ordinary night without walking.
+/// * Otherwise (the app was not listening, the phone rebooted or the
+///   sensor reset, over a long interval crossing midnight) the steps could
+///   belong to any of those days. They are **not** credited — never all
+///   to today. Existing records are kept; both ends are marked incomplete
+///   and the days in between stay unknown.
 /// * Days that the ledger cannot vouch for are simply not created
 ///   (unknown ≠ zero).
 class StepLedger {
@@ -26,6 +34,13 @@ class StepLedger {
   /// Readings closer than this are considered continuous: misattributing
   /// steps within such a short window across midnight is negligible.
   static const tolerance = Duration(minutes: 30);
+
+  /// A non-wake-up sensor may drop its oldest batched events if its buffer
+  /// overflows while the phone sleeps; the next event then carries all the
+  /// missed steps. One event normally carries only a few steps, so a
+  /// larger jump means events may have been lost and the gap is not
+  /// trusted.
+  static const maxSingleEventSteps = 100;
 
   final Map<Day, DayRecord> _days;
 
@@ -51,19 +66,31 @@ class StepLedger {
       final today = Day.fromMillis(s.wallMs);
       _markIncomplete(today, touched); // tracking began mid-day
       if (Day.fromMillis(s.bootWallMs) == today && s.steps > 0) {
-        _add(today, s.steps, touched);
+        // Today may already hold steps restored from a backup, which are
+        // partly the same steps: keep the larger value, never add both.
+        final r = _days[today]!;
+        if (s.steps > r.steps) {
+          _days[today] = r.copyWith(steps: s.steps);
+        }
       }
       last = s;
       return touched;
     }
 
+    // Out of order: a reading from an earlier boot that is also earlier
+    // in time is a late, stale delivery. (An earlier boot number with a
+    // *later* time means a new counter lifetime — another device or a
+    // factory reset — and is handled like a reboot below, so a restored
+    // baseline can never block counting.)
+    final olderBoot = s.boot != -1 && prev.boot != -1 && s.boot < prev.boot;
+    if (olderBoot && s.wallMs <= prev.wallMs) return touched;
     final newBoot =
         s.boot != prev.boot || (s.boot == -1 && s.elapsedMs < prev.elapsedMs);
     if (!newBoot && s.elapsedMs <= prev.elapsedMs) return touched; // stale
-    if (s.boot != -1 && prev.boot != -1 && s.boot < prev.boot) return touched;
 
     final int fromWall;
     final int baseSteps;
+    var observed = false;
     if (newBoot) {
       // Counter restarted at boot. Steps between the last reading and the
       // shutdown are lost unless the shutdown was captured (or was soon
@@ -85,6 +112,10 @@ class StepLedger {
     } else {
       fromWall = prev.wallMs;
       baseSteps = prev.steps;
+      observed =
+          s.session >= 0 &&
+          s.session == prev.session &&
+          (s.wakeUp || s.steps - prev.steps <= maxSingleEventSteps);
     }
 
     final delta = s.steps - baseSteps;
@@ -93,19 +124,22 @@ class StepLedger {
 
     if (startDay == endDay) {
       _add(endDay, delta, touched);
-    } else if (delta == 0 || s.wallMs - fromWall <= tolerance.inMilliseconds) {
-      // Continuous counter with no (or negligible) steps across midnight:
-      // every day in between is a known day.
+    } else if (delta == 0 ||
+        observed ||
+        s.wallMs - fromWall <= tolerance.inMilliseconds) {
+      // No steps at all, a continuously observed sensor, or a negligible
+      // window: every day in between is a known day, and the steps belong
+      // to the later reading's day.
       for (final d in Day.range(startDay, endDay)) {
         _ensure(d, touched);
       }
       _add(endDay, delta, touched);
     } else {
-      // Ambiguous: steps happened somewhere in a long interval crossing
-      // midnight. Credit them to the later day and flag both ends.
+      // Unobserved for a long time across midnight: the steps could belong
+      // to any of these days. Don't credit them (never all to today); keep
+      // existing records and flag both ends as incomplete.
       _markIncomplete(startDay, touched);
       _markIncomplete(endDay, touched);
-      _add(endDay, delta, touched);
     }
 
     last = s;
