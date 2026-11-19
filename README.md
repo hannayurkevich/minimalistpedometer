@@ -72,15 +72,16 @@ Tap the target figure on the Statistics screen to type a new one (number keyboar
 
 - **Sensor.** The hardware step counter is a low-power sensor that counts steps since boot, even while the app is closed.
 - **Why a foreground service.** Since Android 9, background apps receive *no* sensor events. Without readings over time, the app couldn't tell which day steps belong to, so `StepCounterService` keeps a listener registered. Android requires a notification for this. It uses a silent, minimum-importance "Counting steps" notification. On Android 13+ the app never asks for notification permission, so the notification usually doesn't appear in the shade at all, although the service still runs.
-- **Battery.** While the UI is hidden, the service uses hardware batching (5-minute report latency, preferring the wake-up sensor variant). Readings are buffered in the sensor hub and each keeps its own timestamp. While the app is visible, readings are delivered immediately.
+- **Battery.** While the UI is hidden, the service uses hardware batching (5-minute report latency, preferring the wake-up sensor variant). Readings are buffered in the sensor hub and each keeps its own timestamp. While the app is visible, readings are delivered immediately. Some phones only have a non-wake-up step counter (the Pixel 7 does); its buffer can drop the oldest readings if it fills while the phone sleeps.
 - **Capture vs accounting.**
-  - Native code only queues raw readings (`boot count, elapsed time, wall time, counter value`).
+  - Native code only queues raw readings (`boot count, elapsed time, wall time, counter value`, plus the tracking session and whether the sensor is the wake-up variant).
   - The Dart `StepLedger` turns them into daily totals.
-  - Readings are acknowledged (deleted natively) only *after* the totals and ledger baseline are saved, in one atomic write. A crash therefore can never lose or double-count steps.
-- **Reboots.** `Settings.Global.BOOT_COUNT` detects a new boot, so the new value is exactly the steps since boot. A clean shutdown is captured via `ACTION_SHUTDOWN`. After an unclean one with a long unobserved gap, the day is marked partial. The service restarts on `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`.
+  - While readings wait to be processed (typically while the app is closed), the queue keeps only the latest one per day, boot and session, except for two readings it never drops: the **first reading of each day** and the first reading after the service starts. Without the first reading of the day, a whole morning would look like one jump from the previous evening, and on a non-wake-up sensor that jump couldn't be trusted (see *Midnight and interruptions*). Those two readings are saved straight away (in the background); others after 2 seconds.
+  - Readings are acknowledged (deleted natively) only *after* the totals and ledger baseline are saved, in one atomic write. So a reading that reached the queue on disk is never lost between native code and Dart, and a reading delivered again after a crash is never counted twice. It does not cover readings still in memory: if the process is killed before a reading is saved, it is lost. The step counter is cumulative, so the steps reappear in the next reading, but the wider gap can make them fall under the interruption rule below.
+- **Reboots.** `Settings.Global.BOOT_COUNT` detects a new boot, so the new value is exactly the steps since boot. A clean shutdown is captured via `ACTION_SHUTDOWN`, using the last reading already received, so steps still waiting in the sensor's buffer (up to about 5 minutes) are lost. After an unclean one with a long unobserved gap, the day is marked partial. The service restarts on `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`.
 - **Sensor resets.** A counter value that goes backwards without a reboot is treated as a restart from 0, and the day is marked partial.
 - **Readings out of order.** A reading older than one already counted is ignored, so nothing is counted twice. A lower boot number with a *later* time (another phone, or a factory reset) starts a new count instead of blocking it.
-- **Midnight and interruptions.** Steps between two readings go to the later reading's day when that is certain: same day, under 30 min apart, or the sensor was listening the whole time (an ordinary night without walking). If the app wasn't listening for a long time across midnight, the steps could belong to any of those days, so they are not counted; both ends are marked partial. See *Data Storage & Recovery*.
+- **Midnight and interruptions.** Steps between two readings go to the later reading's day when that is certain: same day, under 30 min apart, or the sensor was listening the whole time (an ordinary night without walking). "Listening the whole time" means the same service session, with either a wake-up sensor (its readings are never dropped) or a jump of at most 100 steps (on a Pixel 7 the sensor reported about one reading per step; a much bigger jump suggests readings were dropped). In every other case where steps happened across midnight over more than 30 min (the service was stopped, the phone rebooted, the sensor reset, or a non-wake-up jump over 100), the steps could belong to any of those days, so they are not counted. Existing records are kept and both ends are marked partial. The 100-step limit is a heuristic, not an Android guarantee. See *Data Storage & Recovery*.
 - **Limitations:**
   - History starts when the app is first allowed to count. Android keeps no per-day step history that an app could reconstruct.
   - If the user force-stops the app, nothing is recorded until it's opened again. Steps from that gap are counted only if it stayed within one day.
@@ -111,15 +112,17 @@ All states are shown in place of the step count, with no extra UI:
 
 **Where data lives.** Step history (one total per day) and the daily target are saved on the phone, in the app's own storage. Nothing is sent anywhere. Android keeps a few extra bits for step counting that never leave the phone and are not backed up.
 
-**Closing the app or restarting the phone.** Nothing is lost. On iPhone, the system keeps counting steps while the app is closed. On Android, a background service keeps counting, and after a restart it picks up again as soon as the phone is unlocked.
+**Closing the app or restarting the phone.** History and target are kept. On iPhone, the system keeps counting steps while the app is closed. On Android, a background service keeps counting, and after a restart it picks up again once the phone is unlocked. Two Android exceptions: a few minutes of steps just before a shutdown can be lost, and after an overnight restart, steps walked before unlocking the phone the next day are not counted (the same rule as a long interruption below).
 
-**Updating the app.** History, target and counting all carry on as before.
+**Updating the app.** History, target and counting all carry on as before. (On a Pixel 7 with Android 17, an in-place update of a debug build kept the history and target; counting after the update has not been checked on the device yet.)
 
 **Deleting and reinstalling on Android.** Android itself keeps no step history, so whatever comes back comes from Android's own backup:
-- If backup to Google is on for the phone, the step history and daily target are restored when the app is reinstalled, including on a new phone or through phone-to-phone transfer.
+- If backup to Google is on for the phone, the step history and daily target are restored when the app is reinstalled. The backup rules include phone-to-phone transfer too.
 - Android backs up about once a day, so the newest day or so may be missing.
-- Counting starts fresh after a restore. The first day is partial, and steps taken while the app was uninstalled are not counted.
+- Counting starts fresh after a restore: the old step-counter baseline is discarded and the first new reading only sets a new one. Steps taken while the app was uninstalled are therefore not counted, and today is marked partial.
+- If the backup already contains today: those steps are kept and new steps are added on top. If the phone also restarted earlier that day, the steps since that restart may overlap with the restored ones, so today keeps the larger of the two numbers instead of adding them.
 - If backup is off, the app starts empty.
+- This behaviour is covered by automated tests but has not yet been checked with a real backup and restore.
 
 **Deleting and reinstalling on iPhone.** iOS deletes the app's storage. After reinstalling and allowing Motion & Fitness again, the last 7 days come back from the iPhone's motion data, and older history and a custom target are lost. Restoring the whole iPhone from an iCloud or computer backup brings everything back. "Offload App" (instead of Delete) also keeps the data.
 
@@ -149,10 +152,10 @@ flutter test test/visual --update-goldens       # re-render design screenshots
 
 | File | Covers |
 |------|--------|
-| `test/step_ledger_test.dart` | first reading, double-count prevention, restart re-delivery, reboots (clean/unclean/no BOOT_COUNT/new phone), sensor reset, midnight attribution, ordinary nights, long interruptions |
+| `test/step_ledger_test.dart` | first reading (incl. after a restore: no double-counted today, phone running for days), double-count prevention, restart re-delivery, reboots (clean/unclean/no BOOT_COUNT/days ago/lower boot number later in time), sensor reset (same day/across midnight), midnight attribution, ordinary nights, first reading after midnight on a non-wake-up sensor (kept/delayed/missing, 100-step limit), long and short interruptions, readings from older app versions |
 | `test/stats_test.dart` | goal and calendar classification, 7-day average with partial history, last-7-days bars, bar scale, calendar range (Mon–Sun, 29–35 days, fixed 5 rows, week/month/year boundaries), DST-safe day arithmetic, formatting |
-| `test/persistence_test.dart` | target default, range and persistence, Android first install/restart/update/backup restore/new phone, iOS Core Motion merge, history after restart, corrupt state, demo never persisted, Android save-then-ack |
-| `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, editing the daily target, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
+| `test/persistence_test.dart` | target default, range and persistence, Android first install/restart/update/backup restore/new phone/old backup without ID, iOS Core Motion merge (positive, zero, lower, unavailable), history after restart, corrupt state, demo never persisted, Android save-then-ack |
+| `test/ui_test.dart` | step/walking-time crossfade, 2 s timeout, second tap, fixed size, no oval outline, identical page dots, editing the daily target, read-only bars with today in yellow, calendar keeps 5 rows, timer disposal, permission states, unknown data, swipe navigation, small-screen fit, midnight rollover, live updates |
 | `test/visual/` | golden renders of both screens (in `goldens/`) for design review |
 
 ## Testing on physical devices
@@ -169,9 +172,12 @@ Simulators and emulators don't produce real step data. Use real phones.
 7. **Date rollover:** keep the app open across midnight, or change the device time. Today resets and yesterday appears in the bars and calendar.
 8. **Denial:** deny once to see *Tap to allow*. Deny again to see *Tap to open Settings*. Revoking the permission in Settings is detected when the app resumes.
 9. Check `adb shell dumpsys activity services com.hy.minipedometer` to confirm the service is running.
+
+> **Before steps 10–11:** these tests change real data. Uninstalling deletes the app's history on the phone, and a restore brings back only what the last backup contained (up to about a day old). A force-stop that lasts past midnight means the steps from that gap are not counted. Copy the data first. For a debug build: `adb exec-out run-as com.hy.minipedometer cat shared_prefs/FlutterSharedPreferences.xml > backup.xml`. Use a test phone or a test install if possible.
+
 10. **Backup restore:** with Google backup on, run `adb shell bmgr backupnow com.hy.minipedometer`, uninstall, then reinstall from the Play Store (or `adb install` followed by `adb shell bmgr restore com.hy.minipedometer`). History and target come back, the normal permission prompt appears, and today starts fresh (no burst of old steps).
 11. **Long interruption:** force-stop the app in the evening, walk the next morning, then open it. Today shows only steps after reopening, not the night's and morning's accumulated total.
-12. **Ordinary night:** leave the app running overnight. Yesterday and today stay complete, and the first morning steps are counted.
+12. **Ordinary night:** leave the app running overnight. The first morning steps are counted, and yesterday and today stay complete. The screens don't show the "partial" flag; on a debug build check it with the command above (the second number per day is `1` when complete).
 
 ### iOS
 1. Open `ios/Runner.xcworkspace` in Xcode, set your Team, and run on an iPhone.
