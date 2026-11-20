@@ -56,7 +56,7 @@ A missing `DayRecord` means *unknown* for past days. Today is the exception: onc
 
 ### Daily average
 
-The average covers the **same 7 days as the bars** (six days ago through today), **including today's steps so far**, so it moves during the day as you walk. Only days with data count: right after installing, it averages the days so far, and on the first day it equals today's steps. Days without any data (for example before installing on Android) are skipped rather than counted as zero, and days with a known 0 do count.
+The average covers the **same 7 days as the bars** (six days ago through today), **including today's steps so far**, so it moves during the day as you walk. Only days with data count: right after installing, it averages the days so far, and on the first day it equals today's steps. Empty days are skipped rather than counted as zero: days without any data (for example before installing on Android) and days with 0 steps (such as today just after midnight, or a day the phone stayed at home). If every day so far is empty, it shows 0.
 
 In demo mode (22–28 February 2027) this gives **8 493**.
 

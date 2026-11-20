@@ -57,17 +57,38 @@ void main() {
       expect(dailyAverage(r, tuesday), 4283);
     });
 
-    test('known zero days count; unknown days do not', () {
+    test('empty days (no data or 0 steps) are left out', () {
       final r = recordsOf([
         DayRecord(monday.addDays(4), 8000),
-        DayRecord(monday.addDays(5), 0),
+        DayRecord(monday.addDays(5), 0), // phone stayed at home
       ]);
-      expect(dailyAverage(r, sunday), 4000);
+      expect(dailyAverage(r, sunday), 8000);
+    });
+
+    test('just after midnight, today\'s 0 does not pull it down', () {
+      // The screenshot case: Fri 20 Nov 2026 at 00:12.
+      const friday = Day(2026, 11, 20);
+      final r = recordsOf([
+        DayRecord(friday.addDays(-5), 2984), // Sun
+        DayRecord(friday.addDays(-4), 7610),
+        DayRecord(friday.addDays(-3), 5630),
+        DayRecord(friday.addDays(-2), 7827),
+        DayRecord(friday.addDays(-1), 5304),
+        DayRecord(friday, 0, complete: false), // today, no steps yet
+      ]);
+      expect(dailyAverage(r, friday), 5871); // 29 355 / 5, not 4 893
     });
 
     test('first day: today so far', () {
       expect(dailyAverage(recordsOf([DayRecord(sunday, 900)]), sunday), 900);
       expect(dailyAverage(recordsOf([DayRecord(sunday, 0)]), sunday), 0);
+      expect(
+        dailyAverage(
+          recordsOf([DayRecord(sunday.addDays(-1), 0), DayRecord(sunday, 0)]),
+          sunday,
+        ),
+        0,
+      );
       expect(dailyAverage({}, sunday), isNull);
     });
   });

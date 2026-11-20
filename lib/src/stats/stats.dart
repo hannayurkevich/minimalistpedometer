@@ -39,17 +39,21 @@ List<Day> lastSevenDays(Day today) => [
 /// Daily average over the seven days shown in the bars (six days ago …
 /// today), including today's steps so far.
 ///
-/// Only days with data count: before seven days of history exist (e.g.
-/// after installing) it averages the days so far — on the first day it is
-/// simply today's steps. Days without any data are left out rather than
-/// counted as zero; known zero days count. `null` only with no data at all.
+/// Only days with steps count: empty days — no data, or 0 steps (such as
+/// today just after midnight, or a day the phone stayed at home) — are
+/// left out, so they never pull the average down. Before seven days of
+/// history exist (e.g. after installing) it averages the days so far.
+/// If there is data but every day is empty, it is 0; `null` only with no
+/// data at all.
 int? dailyAverage(Map<Day, DayRecord> records, Day today) {
-  final values = [
+  final days = [
     for (final d in lastSevenDays(today))
       if (records[d] case final r?) r.steps,
   ];
-  if (values.isEmpty) return null;
-  return (values.reduce((a, b) => a + b) / values.length).round();
+  if (days.isEmpty) return null;
+  final walked = days.where((s) => s > 0).toList();
+  if (walked.isEmpty) return 0;
+  return (walked.reduce((a, b) => a + b) / walked.length).round();
 }
 
 /// Full-scale value for the weekly bars: one consistent scale for all
